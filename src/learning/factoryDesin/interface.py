@@ -54,4 +54,23 @@ class VictorianFurnitureFactory(FurnitureFactory):
         return VictorianChair()
     
     def create_sofa(self) -> Sofa:
-        return VictorianSofa()                
+        return VictorianSofa()      
+
+
+  # --- CLIENT CODE ---
+def order_furniture(factory: FurnitureFactory):
+    chair = factory.create_chair()
+    sofa = factory.create_sofa()
+    
+    print(chair.sit_on())
+    print(sofa.lie_on())
+
+
+# --- TESTING ---
+print("--- Ordering Modern Style ---")
+modern_factory = ModernFurnitureFactory()
+order_furniture(modern_factory)
+
+print("\n--- Ordering Victorian Style ---")
+victorian_factory = VictorianFurnitureFactory()
+order_furniture(victorian_factory)            
