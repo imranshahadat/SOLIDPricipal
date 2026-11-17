@@ -1,0 +1,105 @@
+
+name: Learning CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+
+  # -------------------------
+  # CI: Test and Validate
+  # -------------------------
+  ci:
+    name: Python CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.8"
+
+      - name: Install Dependencies
+        run: uv sync --frozen
+
+      - name: Validate Python Files
+        run: |
+          uv run python -m compileall -q src
+
+  # -------------------------
+  # Build and Push Docker
+  # -------------------------
+  build:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+
+    needs: ci
+
+    # Do not push images for pull requests
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/learning:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/learning:${{ github.sha }}
+
+  # -------------------------
+  # CD: Deploy to aws
+  # -------------------------
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+
+    needs: build
+
+    steps:
+      - name: Deploy Using SSH
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /opt/learning
+
+            docker compose pull
+
+            docker compose up -d --remove-orphans
+
+            docker image prune -f
